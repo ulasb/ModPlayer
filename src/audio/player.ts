@@ -179,6 +179,7 @@ export class PlayerController {
           throw new Error(`this browser has no decoder for ${label}`);
         }
         const tags = parseTags(buffer);
+        const hasTags = !!(tags.title || tags.artist || tags.album || tags.art);
         const title =
           tags.title && tags.artist
             ? `${tags.artist} — ${tags.title}`
@@ -186,7 +187,11 @@ export class PlayerController {
         this.onTrackInfo({
           title,
           format: label,
-          details: [tags.album, mode === "element" ? "NATIVE STREAMING" : "FULL DECODE"]
+          details: [
+            tags.album,
+            mode === "element" ? "NATIVE STREAMING" : "FULL DECODE",
+            hasTags ? "" : "NO EMBEDDED TAGS",
+          ]
             .filter(Boolean)
             .join(" · "),
           art: tags.art,
