@@ -19,6 +19,7 @@
     "butterchurn": "^2.6.7",
     "butterchurn-presets": "^2.4.7",
     "chiptune3": "^0.8.7",
+    "fflate": "^0.8.3",
     "spessasynth_lib": "^4.3.8"
   }
 }

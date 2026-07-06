@@ -38,10 +38,10 @@ app.innerHTML = `
       <h2>LOAD</h2>
       <div class="load-row">
         <label class="file-btn" for="file-input">OPEN FILE…</label>
-        <input type="file" id="file-input" accept=".mod,.xm,.s3m,.it,.mptm,.mtm,.669,.med,.okt,.ult,.stm,.far,.dbm,.digi,.emod,.mid,.midi,.rmi,.kar" hidden />
+        <input type="file" id="file-input" accept=".mod,.xm,.s3m,.it,.mptm,.mtm,.669,.med,.okt,.ult,.stm,.far,.dbm,.digi,.emod,.mid,.midi,.rmi,.kar,.zip,.gz" hidden />
       </div>
       <div class="url-row">
-        <input type="url" id="url-input" placeholder="https://… (mod/xm/s3m/it/mid)" />
+        <input type="url" id="url-input" placeholder="https://… (mod/xm/s3m/it/mid/zip)" />
         <button id="url-load">GET</button>
       </div>
     </div>
@@ -87,6 +87,19 @@ app.innerHTML = `
     </div>
   </div>
 `;
+
+const MUSIC_EXT =
+  /\.(mod|xm|s3m|it|mptm|mtm|669|med|okt|ult|stm|far|dbm|digi|emod|sfx|amf|ams|dsm|gdm|imf|j2b|mo3|psm|ptm|umx|mid|midi|rmi|kar)$/i;
+
+function isZip(buffer: ArrayBuffer): boolean {
+  const b = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+  return b.length >= 4 && b[0] === 0x50 && b[1] === 0x4b && (b[2] === 3 || b[2] === 5) ;
+}
+
+function isGzip(buffer: ArrayBuffer): boolean {
+  const b = new Uint8Array(buffer, 0, Math.min(2, buffer.byteLength));
+  return b.length >= 2 && b[0] === 0x1f && b[1] === 0x8b;
+}
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const fileInput = $<HTMLInputElement>("#file-input");
@@ -164,12 +177,79 @@ player.onState = (state: PlaybackState) => {
 // ---------- loading ----------
 
 let activeTrackBtn: HTMLElement | null = null;
+let archiveSection: HTMLElement | null = null;
 
 async function loadBuffer(buffer: ArrayBuffer, name: string, sourceBtn: HTMLElement | null = null) {
+  if (isZip(buffer)) {
+    await loadArchive(buffer, name);
+    return;
+  }
+  if (isGzip(buffer)) {
+    const { gunzipSync } = await import("fflate");
+    try {
+      const out = gunzipSync(new Uint8Array(buffer));
+      await loadBuffer(
+        out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer,
+        name.replace(/\.gz$/i, ""),
+        sourceBtn
+      );
+    } catch {
+      setStatus("ERR: could not decompress gzip file", "error");
+    }
+    return;
+  }
   activeTrackBtn?.classList.remove("active");
   activeTrackBtn = sourceBtn;
   sourceBtn?.classList.add("active");
   await player.load(buffer, name);
+}
+
+/** Unpack a .zip in memory, list its music files in the sidebar, play the first. */
+async function loadArchive(buffer: ArrayBuffer, archiveName: string) {
+  setStatus("UNPACKING…", "info");
+  const { unzipSync } = await import("fflate");
+  let files: Record<string, Uint8Array>;
+  try {
+    files = unzipSync(new Uint8Array(buffer), {
+      filter: (f) => MUSIC_EXT.test(f.name) && f.originalSize < 256 * 1024 * 1024,
+    });
+  } catch {
+    setStatus("ERR: not a readable zip archive", "error");
+    return;
+  }
+  const entries = Object.entries(files)
+    .map(([path, data]) => ({ path, name: path.split("/").pop()!, data }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (entries.length === 0) {
+    setStatus("ERR: no playable music files in archive", "error");
+    return;
+  }
+  setStatus("");
+
+  // replace any previous archive listing in the sidebar
+  archiveSection?.remove();
+  archiveSection = document.createElement("div");
+  const head = document.createElement("div");
+  head.className = "demo-group";
+  head.textContent = `ARCHIVE: ${archiveName}`;
+  archiveSection.appendChild(head);
+  const buttons: HTMLButtonElement[] = [];
+  for (const entry of entries) {
+    const btn = document.createElement("button");
+    btn.className = "track-btn";
+    const ext = entry.name.split(".").pop()!.toUpperCase();
+    btn.innerHTML = `<span class="fmt">${ext}</span>`;
+    btn.appendChild(document.createTextNode(entry.name));
+    btn.addEventListener("click", () => {
+      const d = entry.data;
+      void loadBuffer(d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer, entry.name, btn);
+    });
+    archiveSection.appendChild(btn);
+    buttons.push(btn);
+  }
+  demoList.prepend(archiveSection);
+  demoList.scrollTop = 0;
+  buttons[0].click();
 }
 
 async function loadUrl(url: string, sourceBtn: HTMLElement | null = null, displayName?: string) {

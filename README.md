@@ -17,6 +17,9 @@ styled as a CRT demoscene deck.
   SoundFont (lazy-loaded on first MIDI play).
 - **Three ways to load music** — bundled public-domain demo tracks, a local file
   (picker or drag-and-drop anywhere), or a direct URL (needs CORS on the remote host).
+- **Compressed archives** — `.zip` archives (from any load path) are unpacked in the
+  browser ([fflate](https://github.com/101arrowz/fflate)); their music files appear as
+  a playlist in the sidebar and the first one auto-plays. Single `.gz` files work too.
 - **13 visualizations**, all fed from one shared `AnalyserNode` pipeline
   (frequency, waveform, stereo channels, beat detection):
 
