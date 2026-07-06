@@ -149,8 +149,8 @@ viz.onVizChanged = (_i, name) => {
   vizName.textContent = name;
   btnPreset.style.display = viz.active?.nextPreset ? "" : "none";
 };
-void viz.select(0);
-viz.start();
+// idle until something plays: show the default selection's name, run nothing
+vizName.textContent = viz.names[0];
 
 // ---------- status / track info ----------
 
@@ -173,7 +173,16 @@ player.onTrackInfo = (info) => {
 };
 player.onState = (state: PlaybackState) => {
   btnPlay.textContent = state === "playing" ? "❚❚" : "▶";
-  if (state === "playing") idleOverlay.classList.add("hidden");
+  if (state === "playing") {
+    idleOverlay.classList.add("hidden");
+    void viz.activate(); // re-creates the last selected visualizer
+  } else if (state === "paused") {
+    viz.pause(); // freeze the frame, no CPU burned while paused
+  } else if (state === "stopped" || state === "idle") {
+    idleOverlay.classList.remove("hidden");
+    viz.deactivate(); // tear down: zero render cost while silent
+    engine.level = 0; // let the VU meter go dark
+  }
 };
 
 // ---------- loading ----------
