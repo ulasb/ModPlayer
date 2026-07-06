@@ -27,8 +27,8 @@ interface DemoTrack {
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `
   <header>
-    <div class="logo">MOD<span class="accent">·</span>DECK<span class="cursor">_</span></div>
-    <div class="tagline">tracker &amp; midi player // 13 visualizations</div>
+    <div class="logo">MUSIC<span class="accent">·</span>DECK<span class="cursor">_</span></div>
+    <div class="tagline">tracker · midi · audio // 13 visualizations</div>
     <div class="spacer"></div>
     <a class="gh-link" href="https://github.com/ulasb/ModPlayer" target="_blank" rel="noopener">SOURCE ▸ GITHUB</a>
   </header>
@@ -38,10 +38,10 @@ app.innerHTML = `
       <h2>LOAD</h2>
       <div class="load-row">
         <label class="file-btn" for="file-input">OPEN FILE…</label>
-        <input type="file" id="file-input" accept=".mod,.xm,.s3m,.it,.mptm,.mtm,.669,.med,.okt,.ult,.stm,.far,.dbm,.digi,.emod,.mid,.midi,.rmi,.kar,.zip,.gz" hidden />
+        <input type="file" id="file-input" accept=".mod,.xm,.s3m,.it,.mptm,.mtm,.669,.med,.okt,.ult,.stm,.far,.dbm,.digi,.emod,.mid,.midi,.rmi,.kar,.wav,.aif,.aiff,.flac,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.m3u,.m3u8,.pls,.zip,.gz,audio/*" hidden />
       </div>
       <div class="url-row">
-        <input type="url" id="url-input" placeholder="https://… (mod/xm/s3m/it/mid/zip)" />
+        <input type="url" id="url-input" placeholder="https://… (mod/mid/mp3/flac/zip/m3u)" />
         <button id="url-load">GET</button>
       </div>
     </div>
@@ -91,7 +91,9 @@ app.innerHTML = `
 `;
 
 const MUSIC_EXT =
-  /\.(mod|xm|s3m|it|mptm|mtm|669|med|okt|ult|stm|far|dbm|digi|emod|sfx|amf|ams|dsm|gdm|imf|j2b|mo3|psm|ptm|umx|mid|midi|rmi|kar)$/i;
+  /\.(mod|xm|s3m|it|mptm|mtm|669|med|okt|ult|stm|far|dbm|digi|emod|sfx|amf|ams|dsm|gdm|imf|j2b|mo3|psm|ptm|umx|mid|midi|rmi|kar|wav|aif|aiff|aifc|flac|mp3|m4a|m4b|aac|ogg|oga|opus|webm)$/i;
+
+const PLAYLIST_EXT = /\.(m3u8?|pls)$/i;
 
 function isZip(buffer: ArrayBuffer): boolean {
   const b = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
@@ -167,6 +169,12 @@ function setStatus(msg: string, kind: "info" | "error" | "" = "") {
 }
 
 player.onStatus = (msg) => setStatus(msg, msg ? "info" : "");
+player.onEnded = () => {
+  // auto-advance to the next track in whatever list the current one came from
+  let el: Element | null = activeTrackBtn?.nextElementSibling ?? null;
+  while (el && !el.classList.contains("track-btn")) el = el.nextElementSibling;
+  (el as HTMLElement | null)?.click();
+};
 player.onError = (msg) => setStatus(`ERR: ${msg}`, "error");
 player.onTrackInfo = (info) => {
   trackTitle.textContent = info.title || "UNTITLED";
@@ -191,7 +199,18 @@ player.onState = (state: PlaybackState) => {
 let activeTrackBtn: HTMLElement | null = null;
 let archiveSection: HTMLElement | null = null;
 
-async function loadBuffer(buffer: ArrayBuffer, name: string, sourceBtn: HTMLElement | null = null) {
+function looksLikePlaylist(buffer: ArrayBuffer, name: string): boolean {
+  if (PLAYLIST_EXT.test(name)) return true;
+  const head = new TextDecoder().decode(buffer.slice(0, 256)).trimStart();
+  return head.startsWith("#EXTM3U") || /^\[playlist\]/i.test(head);
+}
+
+async function loadBuffer(
+  buffer: ArrayBuffer,
+  name: string,
+  sourceBtn: HTMLElement | null = null,
+  sourceUrl?: string
+) {
   if (isZip(buffer)) {
     await loadArchive(buffer, name);
     return;
@@ -210,6 +229,10 @@ async function loadBuffer(buffer: ArrayBuffer, name: string, sourceBtn: HTMLElem
     }
     return;
   }
+  if (looksLikePlaylist(buffer, name)) {
+    loadPlaylist(new TextDecoder().decode(buffer), name, sourceUrl);
+    return;
+  }
   // playing anything from outside the archive dismisses the archive listing
   if (archiveSection && (!sourceBtn || !archiveSection.contains(sourceBtn))) {
     archiveSection.remove();
@@ -219,6 +242,36 @@ async function loadBuffer(buffer: ArrayBuffer, name: string, sourceBtn: HTMLElem
   activeTrackBtn = sourceBtn;
   sourceBtn?.classList.add("active");
   await player.load(buffer, name);
+}
+
+interface ListEntry {
+  label: string;
+  fmt: string;
+  onPlay: (btn: HTMLButtonElement) => void;
+}
+
+/** Show a transient track list (archive contents or playlist) in the sidebar
+ *  and start its first entry. Replaces any previous list. */
+function showSidebarList(header: string, entries: ListEntry[]) {
+  archiveSection?.remove();
+  archiveSection = document.createElement("div");
+  const head = document.createElement("div");
+  head.className = "demo-group";
+  head.textContent = header;
+  archiveSection.appendChild(head);
+  const buttons: HTMLButtonElement[] = [];
+  for (const entry of entries) {
+    const btn = document.createElement("button");
+    btn.className = "track-btn";
+    btn.innerHTML = `<span class="fmt">${entry.fmt}</span>`;
+    btn.appendChild(document.createTextNode(entry.label));
+    btn.addEventListener("click", () => entry.onPlay(btn));
+    archiveSection.appendChild(btn);
+    buttons.push(btn);
+  }
+  archiveList.appendChild(archiveSection);
+  archiveList.scrollTop = 0;
+  buttons[0].click();
 }
 
 /** Unpack a .zip in memory, list its music files in the sidebar, play the first. */
@@ -242,31 +295,79 @@ async function loadArchive(buffer: ArrayBuffer, archiveName: string) {
     return;
   }
   setStatus("");
+  showSidebarList(
+    `ARCHIVE: ${archiveName}`,
+    entries.map((entry) => ({
+      label: entry.name,
+      fmt: entry.name.split(".").pop()!.toUpperCase(),
+      onPlay: (btn) => {
+        const d = entry.data;
+        void loadBuffer(d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer, entry.name, btn);
+      },
+    }))
+  );
+}
 
-  // replace any previous archive listing in the sidebar
-  archiveSection?.remove();
-  archiveSection = document.createElement("div");
-  const head = document.createElement("div");
-  head.className = "demo-group";
-  head.textContent = `ARCHIVE: ${archiveName}`;
-  archiveSection.appendChild(head);
-  const buttons: HTMLButtonElement[] = [];
-  for (const entry of entries) {
-    const btn = document.createElement("button");
-    btn.className = "track-btn";
-    const ext = entry.name.split(".").pop()!.toUpperCase();
-    btn.innerHTML = `<span class="fmt">${ext}</span>`;
-    btn.appendChild(document.createTextNode(entry.name));
-    btn.addEventListener("click", () => {
-      const d = entry.data;
-      void loadBuffer(d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer, entry.name, btn);
-    });
-    archiveSection.appendChild(btn);
-    buttons.push(btn);
+/** Parse an M3U/M3U8/PLS playlist and list its entries in the sidebar. */
+function loadPlaylist(text: string, name: string, sourceUrl?: string) {
+  const raw: { url: string; title?: string }[] = [];
+  if (/^\s*\[playlist\]/i.test(text)) {
+    // PLS
+    const files = new Map<number, string>();
+    const titles = new Map<number, string>();
+    for (const line of text.split(/\r?\n/)) {
+      let m = line.match(/^File(\d+)\s*=\s*(.+)$/i);
+      if (m) files.set(Number(m[1]), m[2].trim());
+      m = line.match(/^Title(\d+)\s*=\s*(.+)$/i);
+      if (m) titles.set(Number(m[1]), m[2].trim());
+    }
+    for (const k of [...files.keys()].sort((a, b) => a - b)) {
+      raw.push({ url: files.get(k)!, title: titles.get(k) });
+    }
+  } else {
+    // M3U / M3U8 / plain URL list
+    let pending: string | undefined;
+    for (const line of text.split(/\r?\n/).map((l) => l.trim())) {
+      if (!line) continue;
+      if (line.startsWith("#")) {
+        const m = line.match(/^#EXTINF:[^,]*,(.*)$/);
+        if (m) pending = m[1].trim();
+        continue;
+      }
+      if (line.includes("<")) continue; // not a URL — likely an HTML error page
+      raw.push({ url: line, title: pending });
+      pending = undefined;
+    }
   }
-  archiveList.appendChild(archiveSection);
-  archiveList.scrollTop = 0;
-  buttons[0].click();
+
+  let skipped = 0;
+  const entries = raw.flatMap((e) => {
+    try {
+      const u = new URL(e.url, sourceUrl); // relative paths resolve against the playlist URL
+      if (u.protocol === "http:" || u.protocol === "https:") {
+        return [{ url: u.href, title: e.title || decodeURIComponent(u.pathname.split("/").pop() || e.url) }];
+      }
+    } catch {
+      /* unresolvable (e.g. local path in an uploaded playlist) */
+    }
+    skipped++;
+    return [];
+  });
+
+  if (entries.length === 0) {
+    setStatus("ERR: playlist has no resolvable http(s) entries", "error");
+    return;
+  }
+  setStatus(skipped ? `${skipped} local/unresolvable entr${skipped === 1 ? "y" : "ies"} skipped` : "", skipped ? "info" : "");
+
+  showSidebarList(
+    `PLAYLIST: ${name}`,
+    entries.map((entry) => ({
+      label: entry.title,
+      fmt: (entry.url.split(".").pop() || "?").slice(0, 4).toUpperCase(),
+      onPlay: (btn) => void loadUrl(entry.url, btn, entry.title),
+    }))
+  );
 }
 
 async function loadUrl(url: string, sourceBtn: HTMLElement | null = null, displayName?: string) {
@@ -277,7 +378,7 @@ async function loadUrl(url: string, sourceBtn: HTMLElement | null = null, displa
     const buffer = await res.arrayBuffer();
     setStatus("");
     const name = displayName || decodeURIComponent(url.split("/").pop() || "remote file");
-    await loadBuffer(buffer, name, sourceBtn);
+    await loadBuffer(buffer, name, sourceBtn, url);
   } catch (err) {
     setStatus(
       `ERR: ${err instanceof Error ? err.message : err} — remote host may not allow CORS`,

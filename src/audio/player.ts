@@ -1,4 +1,5 @@
 import { ChiptuneJsPlayer } from "../vendor/chiptune3";
+import { StreamPlayer } from "./stream";
 import type { AudioEngine } from "./engine";
 
 export interface TrackInfo {
@@ -23,6 +24,40 @@ function isMidi(buffer: ArrayBuffer): boolean {
   return tag === "RIFF" && String.fromCharCode(b[8], b[9], b[10], b[11]) === "RMID";
 }
 
+const AUDIO_EXT_MIME: Record<string, [string, string]> = {
+  wav: ["audio/wav", "WAV"],
+  aif: ["audio/aiff", "AIFF"],
+  aiff: ["audio/aiff", "AIFF"],
+  aifc: ["audio/aiff", "AIFF"],
+  flac: ["audio/flac", "FLAC"],
+  mp3: ["audio/mpeg", "MP3"],
+  m4a: ["audio/mp4", "M4A"],
+  m4b: ["audio/mp4", "M4A"],
+  alac: ["audio/mp4", "ALAC"],
+  aac: ["audio/aac", "AAC"],
+  ogg: ["audio/ogg", "OGG"],
+  oga: ["audio/ogg", "OGG"],
+  opus: ["audio/ogg", "OPUS"],
+  webm: ["audio/webm", "WEBM"],
+};
+
+/** Detect a plain audio file: extension first, then container magic bytes. */
+function audioKind(buffer: ArrayBuffer, fileName: string): [string, string] | null {
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  if (AUDIO_EXT_MIME[ext]) return AUDIO_EXT_MIME[ext];
+  if (buffer.byteLength < 12) return null;
+  const b = new Uint8Array(buffer, 0, 12);
+  const tag = (o: number, n: number) => String.fromCharCode(...b.slice(o, o + n));
+  if (tag(0, 4) === "RIFF" && tag(8, 4) === "WAVE") return AUDIO_EXT_MIME.wav;
+  if (tag(0, 4) === "FORM" && (tag(8, 4) === "AIFF" || tag(8, 4) === "AIFC")) return AUDIO_EXT_MIME.aiff;
+  if (tag(0, 4) === "fLaC") return AUDIO_EXT_MIME.flac;
+  if (tag(0, 4) === "OggS") return AUDIO_EXT_MIME.ogg;
+  if (tag(4, 4) === "ftyp") return AUDIO_EXT_MIME.m4a;
+  if (tag(0, 3) === "ID3") return AUDIO_EXT_MIME.mp3;
+  if (b[0] === 0xff && (b[1] & 0xf0) === 0xf0) return AUDIO_EXT_MIME.aac; // ADTS
+  return null;
+}
+
 /**
  * Unified facade over the two backends: libopenmpt (tracker modules) and
  * SpessaSynth (MIDI). Detects the format from file contents, lazy-initializes
@@ -32,8 +67,9 @@ export class PlayerController {
   private mod: ChiptuneJsPlayer | null = null;
   private midiSynth: import("spessasynth_lib").WorkletSynthesizer | null = null;
   private midiSeq: import("spessasynth_lib").Sequencer | null = null;
+  private stream: StreamPlayer | null = null;
 
-  private active: "mod" | "midi" | null = null;
+  private active: "mod" | "midi" | "stream" | null = null;
   private buffer: ArrayBuffer | null = null;
   private fileName = "";
   private repeat = false;
@@ -106,6 +142,18 @@ export class PlayerController {
     return { synth, seq };
   }
 
+  private ensureStream(): StreamPlayer {
+    if (this.stream) return this.stream;
+    const stream = new StreamPlayer(this.engine);
+    stream.onEnded = () => {
+      if (this.active !== "stream") return;
+      this.setState("stopped");
+      this.onEnded();
+    };
+    this.stream = stream;
+    return stream;
+  }
+
   async load(buffer: ArrayBuffer, fileName: string) {
     await this.engine.resume();
     this.stopInternal();
@@ -115,7 +163,24 @@ export class PlayerController {
     this.onStatus("");
 
     try {
-      if (isMidi(buffer)) {
+      const audio = audioKind(buffer, fileName);
+      if (audio) {
+        const [mime, label] = audio;
+        this.active = "stream";
+        const stream = this.ensureStream();
+        stream.setRepeat(this.repeat);
+        let mode: "element" | "buffer";
+        try {
+          mode = await stream.load(buffer.slice(0), mime);
+        } catch {
+          throw new Error(`this browser has no decoder for ${label}`);
+        }
+        this.onTrackInfo({
+          title: fileName.replace(/\.[a-z0-9]+$/i, ""),
+          format: label,
+          details: mode === "element" ? "NATIVE STREAMING" : "FULL DECODE",
+        });
+      } else if (isMidi(buffer)) {
         this.active = "midi";
         const { seq } = await this.ensureMidi();
         seq.loadNewSongList([{ binary: buffer.slice(0), fileName }]);
@@ -137,6 +202,7 @@ export class PlayerController {
       this.onStatus("");
     } catch (err) {
       this.setState("idle");
+      this.onTrackInfo({ title: fileName, format: "", details: "COULD NOT PLAY" });
       this.onError(err instanceof Error ? err.message : String(err));
     }
   }
@@ -147,16 +213,19 @@ export class PlayerController {
       this.midiSeq.pause();
       this.midiSynth?.stopAll(true);
     }
+    if (this.active === "stream") this.stream?.stop();
   }
 
   togglePause() {
     if (this.state === "playing") {
       if (this.active === "mod") this.mod?.pause();
-      else this.midiSeq?.pause();
+      else if (this.active === "midi") this.midiSeq?.pause();
+      else this.stream?.pause();
       this.setState("paused");
     } else if (this.state === "paused") {
       if (this.active === "mod") this.mod?.unpause();
-      else this.midiSeq?.play();
+      else if (this.active === "midi") this.midiSeq?.play();
+      else this.stream?.resume();
       this.setState("playing");
     } else if (this.state === "stopped" && this.buffer) {
       void this.load(this.buffer, this.fileName);
@@ -175,11 +244,13 @@ export class PlayerController {
     this.repeat = on;
     this.mod?.setRepeatCount(on ? -1 : 0);
     if (this.midiSeq) this.midiSeq.loopCount = on ? Infinity : 0;
+    this.stream?.setRepeat(on);
   }
 
   seek(seconds: number) {
     if (this.active === "mod") this.mod?.setPos(seconds);
-    else if (this.midiSeq) this.midiSeq.currentTime = seconds;
+    else if (this.active === "midi" && this.midiSeq) this.midiSeq.currentTime = seconds;
+    else if (this.active === "stream") this.stream?.seek(seconds);
   }
 
   getPosition(): number {
@@ -190,12 +261,14 @@ export class PlayerController {
       return dur > 0 && pos > dur ? pos % dur : pos;
     }
     if (this.active === "midi") return this.midiSeq?.currentTime ?? 0;
+    if (this.active === "stream") return this.stream?.getPosition() ?? 0;
     return 0;
   }
 
   getDuration(): number {
     if (this.active === "mod") return this.mod?.duration ?? 0;
     if (this.active === "midi") return this.midiSeq?.duration ?? 0;
+    if (this.active === "stream") return this.stream?.getDuration() ?? 0;
     return 0;
   }
 

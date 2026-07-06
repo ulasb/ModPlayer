@@ -1,7 +1,7 @@
-# MOD·DECK
+# MUSIC·DECK
 
-A single-page tracker-module and MIDI player with 13 real-time audio visualizations,
-styled as a CRT demoscene deck.
+A single-page music player — tracker modules, MIDI, and regular audio files — with
+13 real-time audio visualizations, styled as a CRT demoscene deck.
 
 **Live: <https://ulasb.github.io/ModPlayer/>**
 
@@ -15,6 +15,12 @@ styled as a CRT demoscene deck.
 - **MIDI playback** — .mid / .rmi / .kar synthesized in the browser by
   [SpessaSynth](https://github.com/spessasus/spessasynth_lib) with the GeneralUser GS
   SoundFont (lazy-loaded on first MIDI play).
+- **Audio files** — FLAC, WAV, MP3, AAC/M4A, OGG/Opus, WebM via the browser's native
+  decoders (streaming `<audio>` element with a `decodeAudioData` fallback). AIFF and
+  ALAC play where the browser has a decoder (Safari); otherwise a clear error is shown.
+- **Playlists** — M3U / M3U8 / PLS by URL or upload; entries appear as a sidebar
+  playlist, and playback auto-advances to the next track in any list (playlist,
+  archive, or demo tracks).
 - **Three ways to load music** — bundled public-domain demo tracks, a local file
   (picker or drag-and-drop anywhere), or a direct URL (needs CORS on the remote host).
 - **Compressed archives** — `.zip` archives (from any load path) are unpacked in the

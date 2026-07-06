@@ -1,7 +1,7 @@
 {
-  "name": "MOD·DECK — Tracker & MIDI Player",
-  "short_name": "MOD·DECK",
-  "description": "Play MOD/XM/S3M/IT tracker modules and MIDI files with 13 real-time visualizations",
+  "name": "MUSIC·DECK — Tracker, MIDI & Audio Player",
+  "short_name": "MUSIC·DECK",
+  "description": "Play tracker modules, MIDI, and audio files (FLAC/WAV/MP3/AAC/OGG…) with 13 real-time visualizations",
   "id": "moddeck",
   "start_url": ".",
   "scope": ".",
