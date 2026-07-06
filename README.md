@@ -31,9 +31,13 @@ styled as a CRT demoscene deck.
   | WARP — audio-throttled starfield | NEBULA — layered polar waveform flower | WATERFALL — scrolling spectrogram |
   | PHASE XY — stereo goniometer | | |
 
-- **Transport** — play/pause/stop, seeking, volume, VU meter, track metadata
+- **Transport** — play/pause/stop, repeat, seeking, volume, VU meter, track metadata
   (format, channels, tracker).
-- **Keyboard** — `space` play/pause, `←`/`→` switch visualization, `P` next Milkdrop preset.
+- **Keyboard** — `space` play/pause, `R` repeat, `←`/`→` switch visualization,
+  `P` next Milkdrop preset.
+- **Installable & offline** — a PWA with a Workbox service worker that precaches the
+  app shell, audio worklets, soundfont, and demo tracks, so the installed app works
+  with no network connection.
 
 ## Development
 

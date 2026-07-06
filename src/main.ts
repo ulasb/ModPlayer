@@ -76,6 +76,7 @@ app.innerHTML = `
     <div class="transport-btns">
       <button id="btn-play" class="play" title="Play / pause [space]">▶</button>
       <button id="btn-stop" title="Stop">■</button>
+      <button id="btn-repeat" title="Repeat track [R]">⟳</button>
     </div>
     <div id="time">--:-- / --:--</div>
     <div class="seek-wrap">
@@ -349,6 +350,16 @@ btnPlay.addEventListener("click", () => {
 });
 $("#btn-stop").addEventListener("click", () => player.stop());
 
+const btnRepeat = $<HTMLButtonElement>("#btn-repeat");
+let repeatOn = false;
+
+function toggleRepeat() {
+  repeatOn = !repeatOn;
+  player.setRepeat(repeatOn);
+  btnRepeat.classList.toggle("active", repeatOn);
+}
+btnRepeat.addEventListener("click", toggleRepeat);
+
 let seeking = false;
 seekEl.addEventListener("pointerdown", () => (seeking = true));
 seekEl.addEventListener("change", () => {
@@ -380,6 +391,10 @@ window.addEventListener("keydown", (e) => {
     case "p":
     case "P":
       viz.active?.nextPreset?.();
+      break;
+    case "r":
+    case "R":
+      toggleRepeat();
       break;
   }
 });

@@ -36,6 +36,7 @@ export class PlayerController {
   private active: "mod" | "midi" | null = null;
   private buffer: ArrayBuffer | null = null;
   private fileName = "";
+  private repeat = false;
   state: PlaybackState = "idle";
 
   onTrackInfo: (info: TrackInfo) => void = () => {};
@@ -54,7 +55,9 @@ export class PlayerController {
   private async ensureMod(): Promise<ChiptuneJsPlayer> {
     if (this.mod) return this.mod;
     this.onStatus("LOADING LIBOPENMPT…");
-    const player = new ChiptuneJsPlayer(this.engine.ctx, CHIPTUNE_WORKLET_URL, { repeatCount: 0 });
+    const player = new ChiptuneJsPlayer(this.engine.ctx, CHIPTUNE_WORKLET_URL, {
+      repeatCount: this.repeat ? -1 : 0,
+    });
     await player.ready;
     player.gain.connect(this.engine.master);
     player.onMetadata((meta) => {
@@ -116,6 +119,8 @@ export class PlayerController {
         this.active = "midi";
         const { seq } = await this.ensureMidi();
         seq.loadNewSongList([{ binary: buffer.slice(0), fileName }]);
+        // the synth core treats Infinity (not -1) as "loop forever"
+        seq.loopCount = this.repeat ? Infinity : 0;
         seq.currentTime = 0;
         seq.play();
         this.onTrackInfo({
@@ -165,13 +170,25 @@ export class PlayerController {
     }
   }
 
+  /** Toggle repeat; applies immediately to whichever backend is active. */
+  setRepeat(on: boolean) {
+    this.repeat = on;
+    this.mod?.setRepeatCount(on ? -1 : 0);
+    if (this.midiSeq) this.midiSeq.loopCount = on ? Infinity : 0;
+  }
+
   seek(seconds: number) {
     if (this.active === "mod") this.mod?.setPos(seconds);
     else if (this.midiSeq) this.midiSeq.currentTime = seconds;
   }
 
   getPosition(): number {
-    if (this.active === "mod") return this.mod?.currentTime ?? 0;
+    if (this.active === "mod") {
+      const pos = this.mod?.currentTime ?? 0;
+      const dur = this.mod?.duration ?? 0;
+      // when repeating, libopenmpt's clock runs past the end — wrap for display
+      return dur > 0 && pos > dur ? pos % dur : pos;
+    }
     if (this.active === "midi") return this.midiSeq?.currentTime ?? 0;
     return 0;
   }
