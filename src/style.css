@@ -208,11 +208,29 @@ input[type="url"]::placeholder {
   padding: 6px 0 14px;
 }
 
-.demo-list::-webkit-scrollbar {
+#archive-list {
+  overflow-y: auto;
+  flex-shrink: 0;
+  max-height: 38%;
+}
+
+#archive-list:not(:empty) {
+  border-bottom: 1px solid var(--line);
+  padding: 4px 0 10px;
+  background: linear-gradient(180deg, rgba(51, 255, 204, 0.04), transparent);
+}
+
+#archive-list .demo-group {
+  color: var(--phos-dim);
+}
+
+.demo-list::-webkit-scrollbar,
+#archive-list::-webkit-scrollbar {
   width: 8px;
 }
 
-.demo-list::-webkit-scrollbar-thumb {
+.demo-list::-webkit-scrollbar-thumb,
+#archive-list::-webkit-scrollbar-thumb {
   background: var(--line);
 }
 

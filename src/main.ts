@@ -45,6 +45,7 @@ app.innerHTML = `
         <button id="url-load">GET</button>
       </div>
     </div>
+    <div id="archive-list"></div>
     <div class="demo-group" style="padding-top:12px">DEMO TRACKS — PUBLIC DOMAIN / CC0</div>
     <div class="demo-list" id="demo-list"></div>
   </aside>
@@ -103,6 +104,7 @@ function isGzip(buffer: ArrayBuffer): boolean {
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const fileInput = $<HTMLInputElement>("#file-input");
+const archiveList = $("#archive-list");
 const urlInput = $<HTMLInputElement>("#url-input");
 const demoList = $("#demo-list");
 const idleOverlay = $("#idle-overlay");
@@ -198,6 +200,11 @@ async function loadBuffer(buffer: ArrayBuffer, name: string, sourceBtn: HTMLElem
     }
     return;
   }
+  // playing anything from outside the archive dismisses the archive listing
+  if (archiveSection && (!sourceBtn || !archiveSection.contains(sourceBtn))) {
+    archiveSection.remove();
+    archiveSection = null;
+  }
   activeTrackBtn?.classList.remove("active");
   activeTrackBtn = sourceBtn;
   sourceBtn?.classList.add("active");
@@ -247,8 +254,8 @@ async function loadArchive(buffer: ArrayBuffer, archiveName: string) {
     archiveSection.appendChild(btn);
     buttons.push(btn);
   }
-  demoList.prepend(archiveSection);
-  demoList.scrollTop = 0;
+  archiveList.appendChild(archiveSection);
+  archiveList.scrollTop = 0;
   buttons[0].click();
 }
 
