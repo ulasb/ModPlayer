@@ -1,11 +1,14 @@
 import { ChiptuneJsPlayer } from "../vendor/chiptune3";
 import { StreamPlayer } from "./stream";
+import { parseTags } from "./metadata";
 import type { AudioEngine } from "./engine";
 
 export interface TrackInfo {
   title: string;
   format: string;
   details: string;
+  /** Embedded cover art, when the file has one */
+  art?: Blob;
 }
 
 export type PlaybackState = "idle" | "loading" | "playing" | "paused" | "stopped";
@@ -175,10 +178,18 @@ export class PlayerController {
         } catch {
           throw new Error(`this browser has no decoder for ${label}`);
         }
+        const tags = parseTags(buffer);
+        const title =
+          tags.title && tags.artist
+            ? `${tags.artist} — ${tags.title}`
+            : tags.title || fileName.replace(/\.[a-z0-9]+$/i, "");
         this.onTrackInfo({
-          title: fileName.replace(/\.[a-z0-9]+$/i, ""),
+          title,
           format: label,
-          details: mode === "element" ? "NATIVE STREAMING" : "FULL DECODE",
+          details: [tags.album, mode === "element" ? "NATIVE STREAMING" : "FULL DECODE"]
+            .filter(Boolean)
+            .join(" · "),
+          art: tags.art,
         });
       } else if (isMidi(buffer)) {
         this.active = "midi";

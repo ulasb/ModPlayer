@@ -57,6 +57,7 @@ app.innerHTML = `
       <div class="small">pick a demo track · open a file · drop one anywhere</div>
     </div>
     <div class="hud hud-track">
+      <img id="track-art" alt="" hidden />
       <div id="track-title"></div>
       <div id="track-details"></div>
     </div>
@@ -176,9 +177,16 @@ player.onEnded = () => {
   (el as HTMLElement | null)?.click();
 };
 player.onError = (msg) => setStatus(`ERR: ${msg}`, "error");
+const trackArt = $<HTMLImageElement>("#track-art");
+let artUrl: string | null = null;
+
 player.onTrackInfo = (info) => {
   trackTitle.textContent = info.title || "UNTITLED";
   trackDetails.textContent = [info.format, info.details].filter(Boolean).join(" · ");
+  if (artUrl) URL.revokeObjectURL(artUrl);
+  artUrl = info.art ? URL.createObjectURL(info.art) : null;
+  trackArt.hidden = !artUrl;
+  if (artUrl) trackArt.src = artUrl;
 };
 player.onState = (state: PlaybackState) => {
   btnPlay.textContent = state === "playing" ? "❚❚" : "▶";

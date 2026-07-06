@@ -333,6 +333,15 @@ main::after {
   flex-wrap: wrap;
 }
 
+#track-art {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  box-shadow: 0 0 12px rgba(51, 255, 204, 0.25);
+  align-self: center;
+}
+
 #track-title {
   font-family: var(--font-display);
   font-size: 30px;
