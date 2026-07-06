@@ -1,0 +1,16 @@
+{
+  "tracks": [
+    { "file": "drozerix_-_neon_techno.mod", "title": "Drozerix — Neon Techno", "format": "MOD", "group": "Tracker Modules" },
+    { "file": "drozerix_-_stardust_jam.mod", "title": "Drozerix — Stardust Jam", "format": "MOD", "group": "Tracker Modules" },
+    { "file": "jam_-_highway_encounter.mod", "title": "JAM — Highway Encounter", "format": "MOD", "group": "Tracker Modules" },
+    { "file": "chip_overture.xm", "title": "Chip Overture", "format": "XM", "group": "Tracker Modules" },
+    { "file": "keygen_9000.xm", "title": "Keygen 9000", "format": "XM", "group": "Tracker Modules" },
+    { "file": "katiecadet-chipdisco.it", "title": "Katie Cadet — ChipDisco", "format": "IT", "group": "Tracker Modules" },
+    { "file": "kj_jose_-_a_new_frontend.s3m", "title": "KJ Jose — A New Frontend", "format": "S3M", "group": "Tracker Modules" },
+    { "file": "bach_prelude_c_bwv846.mid", "title": "Bach — Prelude in C, BWV 846", "format": "MID", "group": "MIDI Classics" },
+    { "file": "beethoven_fur_elise.mid", "title": "Beethoven — Für Elise", "format": "MID", "group": "MIDI Classics" },
+    { "file": "mozart_rondo_alla_turca.mid", "title": "Mozart — Rondo alla Turca", "format": "MID", "group": "MIDI Classics" },
+    { "file": "joplin_the_entertainer.mid", "title": "Joplin — The Entertainer", "format": "MID", "group": "MIDI Classics" },
+    { "file": "debussy_clair_de_lune.mid", "title": "Debussy — Clair de Lune", "format": "MID", "group": "MIDI Classics" }
+  ]
+}
