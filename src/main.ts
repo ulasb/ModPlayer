@@ -172,14 +172,14 @@ async function loadBuffer(buffer: ArrayBuffer, name: string, sourceBtn: HTMLElem
   await player.load(buffer, name);
 }
 
-async function loadUrl(url: string, sourceBtn: HTMLElement | null = null) {
+async function loadUrl(url: string, sourceBtn: HTMLElement | null = null, displayName?: string) {
   try {
     setStatus("FETCHING…", "info");
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const buffer = await res.arrayBuffer();
     setStatus("");
-    const name = decodeURIComponent(url.split("/").pop() || "remote file");
+    const name = displayName || decodeURIComponent(url.split("/").pop() || "remote file");
     await loadBuffer(buffer, name, sourceBtn);
   } catch (err) {
     setStatus(
@@ -232,7 +232,7 @@ async function loadDemoList() {
         btn.className = "track-btn";
         btn.innerHTML = `<span class="fmt">${t.format}</span>`;
         btn.appendChild(document.createTextNode(t.title));
-        btn.addEventListener("click", () => void loadUrl(BASE + "demo/" + t.file, btn));
+        btn.addEventListener("click", () => void loadUrl(BASE + "demo/" + t.file, btn, t.title));
         demoList.appendChild(btn);
       }
     }
