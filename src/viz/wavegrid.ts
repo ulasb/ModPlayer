@@ -14,10 +14,11 @@ export class WaveGrid extends Canvas2DVisualizer {
     const COLS = WaveGrid.COLS;
     const ROWS = WaveGrid.ROWS;
 
-    // capture a spectrum snapshot every ~55 ms
+    // capture a spectrum snapshot every ~55 ms (keep the timer remainder so
+    // the sub-row interpolation below stays continuous across captures)
     this.sinceRow += dt;
-    if (this.sinceRow > 55) {
-      this.sinceRow = 0;
+    while (this.sinceRow >= 55) {
+      this.sinceRow -= 55;
       const row = new Float32Array(COLS);
       for (let i = 0; i < COLS; i++) {
         // symmetric around center: bass in the middle, treble at the edges
@@ -25,7 +26,7 @@ export class WaveGrid extends Canvas2DVisualizer {
         const bin = Math.floor(Math.pow(centered, 1.7) * engine.bins * 0.5);
         row[i] = Math.pow((engine.freq[bin] ?? 0) / 255, 1.4);
       }
-      this.history.unshift(row); // newest first (farthest away)
+      this.history.unshift(row); // newest first — spawns at the horizon
       if (this.history.length > ROWS) this.history.pop();
     }
 
@@ -54,12 +55,15 @@ export class WaveGrid extends Canvas2DVisualizer {
     ctx.arc(w / 2, horizon, sunR, Math.PI, 0);
     ctx.fill();
 
-    // mountains: draw far rows first, fill under each line to occlude
+    // mountains: draw far rows first, fill under each line to occlude.
+    // depth(j, scroll) = (ROWS - j - scroll) / ROWS is continuous when a
+    // capture bumps every index by one and resets scroll to zero, so each
+    // row glides smoothly from the horizon toward the viewer every frame.
     const zNear = 1;
     const zFar = 7;
     const scroll = this.sinceRow / 55; // sub-row interpolation for smooth motion
-    for (let j = this.history.length - 1; j >= 0; j--) {
-      const depth = (j + 1 - scroll) / ROWS; // 0 near, 1 far
+    for (let j = 0; j < this.history.length; j++) {
+      const depth = (ROWS - j - scroll) / ROWS; // 0 near, 1 far
       const z = zNear + depth * (zFar - zNear);
       const y0 = horizon + (h - horizon) * 0.02 + ((h - horizon) * 1.05) / z;
       const amp = (h * 0.55) / z;
@@ -80,7 +84,9 @@ export class WaveGrid extends Canvas2DVisualizer {
       ctx.fill();
       const nearness = 1 - depth;
       const hue = 285 - nearness * 100;
-      ctx.strokeStyle = `hsla(${hue} 100% ${45 + nearness * 65 * engine.level + nearness * 15}% / ${0.25 + nearness * 0.75})`;
+      // fade in over the first row-depth so new rows don't pop at the horizon
+      const fadeIn = Math.min(1, nearness * ROWS);
+      ctx.strokeStyle = `hsla(${hue} 100% ${45 + nearness * 65 * engine.level + nearness * 15}% / ${(0.25 + nearness * 0.75) * fadeIn})`;
       ctx.lineWidth = 1 + nearness * 1.6;
       ctx.stroke();
     }
