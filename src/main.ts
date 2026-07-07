@@ -1,4 +1,12 @@
 import "./style.css";
+import {
+  fsAccessSupported,
+  getSavedDir,
+  setSavedDir,
+  ensureWritePermission,
+  writeFileToDir,
+  collectMusicFiles,
+} from "./fs";
 import { AudioEngine } from "./audio/engine";
 import { PlayerController, type PlaybackState } from "./audio/player";
 import { VizManager } from "./viz/manager";
@@ -46,11 +54,25 @@ app.innerHTML = `
       <h2>LOAD</h2>
       <div class="load-row">
         <label class="file-btn" for="file-input">OPEN FILE…</label>
+        <button id="dir-open">OPEN FOLDER…</button>
         <input type="file" id="file-input" accept=".mod,.xm,.s3m,.it,.mptm,.mtm,.669,.med,.okt,.ult,.stm,.far,.dbm,.digi,.emod,.mid,.midi,.rmi,.kar,.wav,.aif,.aiff,.flac,.mp3,.m4a,.aac,.ogg,.oga,.opus,.webm,.m3u,.m3u8,.pls,.zip,.gz,audio/*" hidden />
+        <input type="file" id="dir-input" webkitdirectory hidden />
       </div>
       <div class="url-row">
         <input type="url" id="url-input" placeholder="https://… (mod/mid/mp3/flac/zip/m3u)" />
         <button id="url-load">GET</button>
+      </div>
+      <button id="save-remote" class="wide-btn" hidden>⤓ SAVE TO DISK</button>
+    </div>
+    <div class="side-section" id="prefs-section" hidden>
+      <h2>PREFS</h2>
+      <div class="pref-row">
+        <span class="pref-label">SAVE MODE</span>
+        <button id="pref-save-mode">ASK EVERY TIME</button>
+      </div>
+      <div class="pref-row">
+        <span class="pref-label">FOLDER</span>
+        <button id="pref-folder">— NONE —</button>
       </div>
     </div>
     <div id="archive-list"></div>
@@ -456,6 +478,13 @@ async function loadUrl(url: string, sourceBtn: HTMLElement | null = null, displa
     setStatus("");
     const name = displayName || decodeURIComponent(url.split("/").pop() || "remote file");
     await loadBuffer(buffer, name, sourceBtn, url);
+    // offer to keep remote files locally
+    if (new URL(url, location.href).origin !== location.origin) {
+      const fname = decodeURIComponent(url.split("/").pop()?.split(/[?#]/)[0] || "remote-file");
+      lastRemote = { buffer, name: fname };
+      saveRemoteBtn.hidden = false;
+      saveRemoteBtn.textContent = `⤓ SAVE TO DISK: ${fname.length > 30 ? fname.slice(0, 28) + "…" : fname}`;
+    }
   } catch (err) {
     setStatus(
       `ERR: ${err instanceof Error ? err.message : err} — remote host may not allow CORS`,
@@ -572,6 +601,140 @@ $("#mini-toggle").addEventListener("click", () => setMini(true));
 $("#mini-restore").addEventListener("click", () => setMini(false));
 $("#mini-list").addEventListener("click", () => app.classList.toggle("show-list"));
 applyMini();
+
+// ---------- open directory ----------
+
+const dirInput = $<HTMLInputElement>("#dir-input");
+const fileExt = (name: string) => (name.split(".").pop() || "?").slice(0, 4).toUpperCase();
+
+$("#dir-open").addEventListener("click", async () => {
+  if (fsAccessSupported && window.showDirectoryPicker) {
+    let dir: FileSystemDirectoryHandle;
+    try {
+      dir = await window.showDirectoryPicker();
+    } catch {
+      return; // user cancelled the picker
+    }
+    const files = await collectMusicFiles(dir, (n) => MUSIC_EXT.test(n));
+    if (!files.length) {
+      setStatus("ERR: no playable music files in folder", "error");
+      return;
+    }
+    showSidebarList(
+      `FOLDER: ${dir.name}`,
+      files.map((f) => ({
+        label: f.path,
+        fmt: fileExt(f.name),
+        onPlay: (btn) =>
+          void f.handle
+            .getFile()
+            .then(async (file) => loadBuffer(await file.arrayBuffer(), f.name, btn)),
+      }))
+    );
+  } else {
+    dirInput.click(); // fallback: webkitdirectory input
+  }
+});
+
+dirInput.addEventListener("change", () => {
+  const files = [...(dirInput.files ?? [])]
+    .filter((f) => MUSIC_EXT.test(f.name))
+    .sort((a, b) => (a.webkitRelativePath || a.name).localeCompare(b.webkitRelativePath || b.name));
+  dirInput.value = "";
+  if (!files.length) {
+    setStatus("ERR: no playable music files in folder", "error");
+    return;
+  }
+  const dirName = files[0].webkitRelativePath?.split("/")[0] || "FOLDER";
+  showSidebarList(
+    `FOLDER: ${dirName}`,
+    files.map((f) => ({
+      label: f.webkitRelativePath?.split("/").slice(1).join("/") || f.name,
+      fmt: fileExt(f.name),
+      onPlay: (btn) => void f.arrayBuffer().then((buf) => loadBuffer(buf, f.name, btn)),
+    }))
+  );
+});
+
+// ---------- save remote files + prefs ----------
+
+const saveRemoteBtn = $<HTMLButtonElement>("#save-remote");
+const prefsSection = $("#prefs-section");
+const prefSaveMode = $<HTMLButtonElement>("#pref-save-mode");
+const prefFolder = $<HTMLButtonElement>("#pref-folder");
+let lastRemote: { buffer: ArrayBuffer; name: string } | null = null;
+let saveMode: "ask" | "dir" = localStorage.getItem("saveMode") === "dir" ? "dir" : "ask";
+
+function renderPrefs() {
+  prefSaveMode.textContent = saveMode === "ask" ? "ASK EVERY TIME" : "USE FOLDER";
+  prefFolder.textContent = localStorage.getItem("saveDirName") || "— NONE —";
+}
+if (fsAccessSupported) {
+  prefsSection.hidden = false;
+  renderPrefs();
+}
+
+prefSaveMode.addEventListener("click", () => {
+  saveMode = saveMode === "ask" ? "dir" : "ask";
+  localStorage.setItem("saveMode", saveMode);
+  renderPrefs();
+});
+
+async function pickSaveFolder(): Promise<FileSystemDirectoryHandle | null> {
+  try {
+    const dir = await window.showDirectoryPicker!({ mode: "readwrite" });
+    await setSavedDir(dir);
+    localStorage.setItem("saveDirName", dir.name);
+    renderPrefs();
+    return dir;
+  } catch {
+    return null;
+  }
+}
+prefFolder.addEventListener("click", () => void pickSaveFolder());
+
+function flashStatus(msg: string) {
+  setStatus(msg, "info");
+  setTimeout(() => {
+    if (statusLine.textContent === msg) setStatus("");
+  }, 5000);
+}
+
+saveRemoteBtn.addEventListener("click", async () => {
+  if (!lastRemote) return;
+  const { buffer, name } = lastRemote;
+  try {
+    if (!fsAccessSupported) {
+      // no File System Access API: hand it to the browser's downloader
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([buffer]));
+      a.download = name;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+      return;
+    }
+    if (saveMode === "dir") {
+      const dir = (await getSavedDir()) ?? (await pickSaveFolder());
+      if (!dir) return;
+      if (!(await ensureWritePermission(dir))) {
+        setStatus("ERR: no write permission for folder", "error");
+        return;
+      }
+      await writeFileToDir(dir, name, buffer);
+      flashStatus(`SAVED → ${dir.name}/${name}`);
+    } else {
+      const fh = await window.showSaveFilePicker!({ suggestedName: name });
+      const w = await fh.createWritable();
+      await w.write(buffer);
+      await w.close();
+      flashStatus(`SAVED: ${name}`);
+    }
+  } catch (err) {
+    if ((err as Error)?.name !== "AbortError") {
+      setStatus(`ERR: save failed — ${err instanceof Error ? err.message : err}`, "error");
+    }
+  }
+});
 
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement && e.target.type === "url") return;

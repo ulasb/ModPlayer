@@ -180,6 +180,35 @@ button:disabled {
   margin-top: 8px;
 }
 
+.wide-btn {
+  width: 100%;
+  margin-top: 8px;
+  color: var(--phos);
+  border-color: var(--phos-dim);
+}
+
+.pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.pref-label {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.pref-row button {
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 input[type="url"] {
   flex: 1;
   min-width: 0;

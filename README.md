@@ -21,8 +21,12 @@ A single-page music player — tracker modules, MIDI, and regular audio files �
 - **Playlists** — M3U / M3U8 / PLS by URL or upload; entries appear as a sidebar
   playlist, and playback auto-advances to the next track in any list (playlist,
   archive, or demo tracks).
-- **Three ways to load music** — bundled public-domain demo tracks, a local file
-  (picker or drag-and-drop anywhere), or a direct URL (needs CORS on the remote host).
+- **Ways to load music** — bundled public-domain demo tracks, a local file (picker or
+  drag-and-drop anywhere), a whole local folder (recursive, played as a playlist), or a
+  direct URL (needs CORS on the remote host).
+- **Save remote files** — anything loaded by URL can be saved locally. With the File
+  System Access API (Chromium) the PREFS section offers ask-every-time or a remembered
+  default folder; elsewhere it falls back to a regular browser download.
 - **Compressed archives** — `.zip` archives (from any load path) are unpacked in the
   browser ([fflate](https://github.com/101arrowz/fflate)); their music files appear as
   a playlist in the sidebar and the first one auto-plays. Single `.gz` files work too.
