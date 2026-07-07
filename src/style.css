@@ -612,6 +612,169 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 0 6px rgba(255, 68, 68, 0.5);
 }
 
+/* ---------- mini player (Winamp-style) ---------- */
+
+#mini-bar {
+  display: none;
+}
+
+#mini-toggle {
+  font-size: 10px;
+}
+
+#app.mini {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(72px, 110px) auto;
+  grid-template-areas:
+    "minibar"
+    "stage"
+    "transport";
+  /* a compact deck, not a full-page app: hug the content, cap the width */
+  height: auto;
+  max-width: 640px;
+  margin: 0 auto;
+  border: 1px solid var(--line);
+  border-top: none;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.7);
+}
+
+#app.mini main {
+  height: clamp(72px, 16vh, 110px);
+}
+
+#app.mini {
+  position: relative;
+}
+
+/* the ≡ button overlays the track list below the mini bar */
+#app.mini.show-list aside {
+  display: flex;
+  position: absolute;
+  top: 50px;
+  left: 0;
+  right: 0;
+  height: min(420px, calc(100vh - 60px));
+  max-height: none;
+  z-index: 20;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+#app.mini header,
+#app.mini aside,
+#app.mini .hud-track,
+#app.mini #status-line {
+  display: none;
+}
+
+#app.mini #mini-bar {
+  grid-area: minibar;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: linear-gradient(180deg, #151a15, #0a0d0a);
+  border-bottom: 2px outset #202820;
+}
+
+#mini-art {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  box-shadow: 0 0 8px rgba(51, 255, 204, 0.25);
+}
+
+#mini-marquee {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  font-family: var(--font-display);
+  font-size: 21px;
+  line-height: 1.1;
+  color: var(--phos);
+  text-shadow: 0 0 10px rgba(51, 255, 204, 0.45);
+  background: #050705;
+  border: 1px inset #1a221a;
+  padding: 3px 0;
+  mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent);
+}
+
+#mini-marquee span {
+  display: inline-block;
+  padding-left: 100%;
+  animation: marquee 16s linear infinite;
+}
+
+@keyframes marquee {
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+#app.mini .hud-viz {
+  bottom: 6px;
+  left: 10px;
+  right: 10px;
+  gap: 6px;
+}
+
+#app.mini #viz-name {
+  font-size: 15px;
+  min-width: 0;
+}
+
+#app.mini .viz-nav button {
+  width: auto;
+  padding: 2px 7px;
+  font-size: 10px;
+}
+
+#app.mini #idle-overlay .big {
+  font-size: clamp(18px, 5vw, 30px);
+}
+
+#app.mini #idle-overlay .small {
+  display: none;
+}
+
+#app.mini .transport {
+  padding: 7px 12px;
+  gap: 9px;
+  border-top: 2px outset #202820;
+}
+
+#app.mini .transport button {
+  width: 34px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+#app.mini .transport button.play {
+  width: 44px;
+}
+
+#app.mini #time {
+  font-size: 19px;
+  min-width: 100px;
+}
+
+#app.mini .vu {
+  width: 56px;
+  height: 18px;
+}
+
+#app.mini .vol-wrap {
+  width: 96px;
+  display: flex;
+}
+
+#app.mini .vol-wrap .label {
+  display: none;
+}
+
 /* ---------- responsive ---------- */
 
 @media (max-width: 760px) {

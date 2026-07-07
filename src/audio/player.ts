@@ -7,8 +7,10 @@ export interface TrackInfo {
   title: string;
   format: string;
   details: string;
-  /** Embedded cover art, when the file has one */
-  art?: Blob;
+  /** Embedded cover art (Blob) or a direct image URL */
+  art?: Blob | string;
+  /** True when an audio file carried no readable tags (enables lookups) */
+  noTags?: boolean;
 }
 
 export type PlaybackState = "idle" | "loading" | "playing" | "paused" | "stopped";
@@ -195,6 +197,7 @@ export class PlayerController {
             .filter(Boolean)
             .join(" · "),
           art: tags.art,
+          noTags: !hasTags,
         });
       } else if (isMidi(buffer)) {
         this.active = "midi";

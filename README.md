@@ -38,9 +38,13 @@ A single-page music player — tracker modules, MIDI, and regular audio files �
   | PHASE XY — stereo goniometer | | |
 
 - **Transport** — play/pause/stop, repeat, seeking, volume, VU meter, track metadata
-  (format, channels, tracker).
-- **Keyboard** — `space` play/pause, `R` repeat, `←`/`→` switch visualization,
-  `P` next Milkdrop preset.
+  (format, channels, tracker), embedded cover art. Untagged files loaded from
+  archive.org URLs get title/album/art from the archive.org metadata API.
+- **Mini player** — a compact Winamp-style deck (scrolling marquee, viz strip,
+  transport) via the MINI button or `M`; engages automatically when the window
+  gets small. The ≡ button overlays the track list.
+- **Keyboard** — `space` play/pause, `R` repeat, `M` mini player, `←`/`→` switch
+  visualization, `P` next Milkdrop preset.
 - **Installable & offline** — a PWA with a Workbox service worker that precaches the
   app shell, audio worklets, soundfont, and demo tracks, so the installed app works
   with no network connection.

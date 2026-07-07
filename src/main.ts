@@ -30,8 +30,16 @@ app.innerHTML = `
     <div class="logo">MUSIC<span class="accent">·</span>DECK<span class="cursor">_</span></div>
     <div class="tagline">tracker · midi · audio // 13 visualizations</div>
     <div class="spacer"></div>
+    <button id="mini-toggle" title="Mini player [M]">MINI ▾</button>
     <a class="gh-link" href="https://github.com/ulasb/ModPlayer" target="_blank" rel="noopener">SOURCE ▸ GITHUB</a>
   </header>
+
+  <div id="mini-bar">
+    <img id="mini-art" alt="" hidden />
+    <div id="mini-marquee"><span id="mini-marquee-text">MUSIC·DECK ✦ AWAITING SIGNAL</span></div>
+    <button id="mini-list" title="Track list">≡</button>
+    <button id="mini-restore" title="Full player [M]">▴</button>
+  </div>
 
   <aside>
     <div class="side-section">
@@ -178,20 +186,79 @@ player.onEnded = () => {
 };
 player.onError = (msg) => setStatus(`ERR: ${msg}`, "error");
 const trackArt = $<HTMLImageElement>("#track-art");
-let artUrl: string | null = null;
+const miniArt = $<HTMLImageElement>("#mini-art");
+const miniMarqueeText = $("#mini-marquee-text");
+let artObjectUrl: string | null = null;
+
+function renderTrackInfo(info: import("./audio/player").TrackInfo) {
+  const title = info.title || "UNTITLED";
+  const details = [info.format, info.details].filter(Boolean).join(" · ");
+  trackTitle.textContent = title;
+  trackDetails.textContent = details;
+  miniMarqueeText.textContent = `${title}${details ? " ✦ " + details : ""}`;
+
+  if (artObjectUrl) URL.revokeObjectURL(artObjectUrl);
+  artObjectUrl = null;
+  let src: string | null = null;
+  if (info.art instanceof Blob) {
+    artObjectUrl = URL.createObjectURL(info.art);
+    src = artObjectUrl;
+  } else if (typeof info.art === "string") {
+    src = info.art;
+  }
+  for (const img of [trackArt, miniArt]) {
+    img.hidden = !src;
+    if (src) img.src = src;
+  }
+}
+
+// When a file from archive.org has no embedded tags, ask the item's metadata
+// API for title/artist/album and use the item image as cover art.
+async function archiveOrgLookup(url: string) {
+  const m = url.match(/^https?:\/\/(?:[a-z0-9-]+\.(?:us\.)?)?archive\.org\/(?:\d+\/items|download)\/([^/]+)\/([^?#]+)/i);
+  if (!m) return null;
+  const [, id, filePath] = m;
+  const res = await fetch(`https://archive.org/metadata/${id}`);
+  if (!res.ok) return null;
+  const j = await res.json();
+  const fname = decodeURIComponent(filePath);
+  const f = (j.files as any[] | undefined)?.find((x) => x.name === fname || decodeURIComponent(x.name) === fname);
+  const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as string | undefined;
+  return {
+    title: one(f?.title),
+    artist: one(f?.artist) || one(f?.creator) || one(j.metadata?.creator),
+    album: one(f?.album) || one(j.metadata?.title),
+    artUrl: `https://archive.org/services/img/${id}`,
+  };
+}
+
+let currentSourceUrl: string | undefined;
+let loadToken = 0;
 
 player.onTrackInfo = (info) => {
-  trackTitle.textContent = info.title || "UNTITLED";
-  trackDetails.textContent = [info.format, info.details].filter(Boolean).join(" · ");
-  if (artUrl) URL.revokeObjectURL(artUrl);
-  artUrl = info.art ? URL.createObjectURL(info.art) : null;
-  trackArt.hidden = !artUrl;
-  if (artUrl) trackArt.src = artUrl;
+  renderTrackInfo(info);
+  if (!info.noTags || !currentSourceUrl) return;
+  const token = loadToken;
+  const url = currentSourceUrl;
+  void archiveOrgLookup(url)
+    .then((meta) => {
+      if (!meta || token !== loadToken) return; // another track started meanwhile
+      renderTrackInfo({
+        ...info,
+        title: meta.title ? (meta.artist ? `${meta.artist} — ${meta.title}` : meta.title) : info.title,
+        details: [meta.album, info.details.replace(" · NO EMBEDDED TAGS", ""), "VIA ARCHIVE.ORG"]
+          .filter(Boolean)
+          .join(" · "),
+        art: info.art || meta.artUrl,
+      });
+    })
+    .catch(() => {});
 };
 player.onState = (state: PlaybackState) => {
   btnPlay.textContent = state === "playing" ? "❚❚" : "▶";
   if (state === "playing") {
     idleOverlay.classList.add("hidden");
+    app.classList.remove("show-list"); // close the mini playlist overlay
     void viz.activate(); // re-creates the last selected visualizer
   } else if (state === "paused") {
     viz.pause(); // freeze the frame, no CPU burned while paused
@@ -249,6 +316,8 @@ async function loadBuffer(
   activeTrackBtn?.classList.remove("active");
   activeTrackBtn = sourceBtn;
   sourceBtn?.classList.add("active");
+  loadToken++;
+  currentSourceUrl = sourceUrl;
   await player.load(buffer, name);
 }
 
@@ -483,6 +552,27 @@ $("#viz-prev").addEventListener("click", () => viz.prev());
 $("#viz-next").addEventListener("click", () => viz.next());
 btnPreset.addEventListener("click", () => viz.active?.nextPreset?.());
 
+// ---------- mini player mode ----------
+// Manual choice wins; otherwise auto-engage when the window gets small.
+const miniQuery = window.matchMedia("(max-width: 620px), (max-height: 440px)");
+let miniManual: boolean | null = null;
+
+function applyMini() {
+  app.classList.toggle("mini", miniManual ?? miniQuery.matches);
+}
+
+function setMini(on: boolean) {
+  // choosing what auto would pick anyway clears the override
+  miniManual = on === miniQuery.matches ? null : on;
+  applyMini();
+}
+
+miniQuery.addEventListener("change", applyMini);
+$("#mini-toggle").addEventListener("click", () => setMini(true));
+$("#mini-restore").addEventListener("click", () => setMini(false));
+$("#mini-list").addEventListener("click", () => app.classList.toggle("show-list"));
+applyMini();
+
 window.addEventListener("keydown", (e) => {
   if (e.target instanceof HTMLInputElement && e.target.type === "url") return;
   switch (e.key) {
@@ -504,6 +594,10 @@ window.addEventListener("keydown", (e) => {
     case "r":
     case "R":
       toggleRepeat();
+      break;
+    case "m":
+    case "M":
+      setMini(!app.classList.contains("mini"));
       break;
   }
 });
